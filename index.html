@@ -87,10 +87,14 @@
         /* Configuration View */
         #view-config {
             padding: 20px;
-            display: flex;
+            display: none;
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
+        }
+
+        #view-config.active {
+            display: flex;
         }
 
         textarea#media-source {
@@ -128,15 +132,13 @@
             /* Override calc for full screen feel if needed, but nav is fixed */
             display: none;
             background-color: #000;
-            display: flex;
             /* Centering media */
             justify-content: center;
             align-items: center;
         }
 
-        /* Specific override for gallery to be hidden correctly with flex */
-        #view-gallery:not(.active) {
-            display: none;
+        #view-gallery.active {
+            display: flex;
         }
 
         #media-container {
@@ -150,16 +152,39 @@
 
         #media-container img,
         #media-container video {
-            max-width: 100%;
-            max-height: 100%;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
+            /* Default */
             display: block;
+            transition: object-fit 0.2s ease;
+        }
+
+        #media-container img.scale-fill,
+        #media-container video.scale-fill {
+            object-fit: cover;
         }
 
         .placeholder-text {
             color: #666;
             font-size: 1.2rem;
             text-align: center;
+        }
+
+        /* Scaling Button */
+        #scale-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            border: 1px solid #444;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            text-transform: uppercase;
         }
 
         /* Overlay Controls */
@@ -199,6 +224,7 @@
 
         <!-- Gallery View -->
         <div id="view-gallery" class="view">
+            <button id="scale-btn">FIT</button>
             <div id="media-container">
                 <!-- Media will be injected here -->
                 <div class="placeholder-text">Aucun média chargé</div>
@@ -220,7 +246,8 @@
          */
         const state = {
             currentIndex: 0,
-            mediaList: []
+            mediaList: [],
+            scaleMode: 'contain' // 'contain' (Fit) or 'cover' (Fill)
         };
 
         /**
@@ -236,7 +263,8 @@
             saveBtn: document.getElementById('save-btn'),
             mediaContainer: document.getElementById('media-container'),
             zonePrev: document.getElementById('zone-prev'),
-            zoneNext: document.getElementById('zone-next')
+            zoneNext: document.getElementById('zone-next'),
+            scaleBtn: document.getElementById('scale-btn')
         };
 
         /**
@@ -261,6 +289,12 @@
                 parseAndLoadState(storedData);
             }
 
+            const storedScale = localStorage.getItem('media_gallery_scale');
+            if (storedScale) {
+                state.scaleMode = storedScale;
+                updateScaleBtn();
+            }
+
             // Event Listeners
             els.saveBtn.addEventListener('click', handleSave);
             els.navConfig.addEventListener('click', () => switchView('config'));
@@ -268,6 +302,8 @@
                 handleSave(); // Auto-save on switch
                 switchView('gallery');
             });
+
+            els.scaleBtn.addEventListener('click', toggleScale);
 
             // Navigation Inputs
             els.zonePrev.addEventListener('click', prevMedia);
@@ -392,9 +428,33 @@
             };
 
             els.mediaContainer.appendChild(mediaEl);
+            applyScaleMode(mediaEl);
 
             // Preload next
             preloadNext(index);
+        }
+
+        function toggleScale() {
+            state.scaleMode = state.scaleMode === 'contain' ? 'cover' : 'contain';
+            localStorage.setItem('media_gallery_scale', state.scaleMode);
+
+            const mediaEl = els.mediaContainer.querySelector('img, video');
+            if (mediaEl) {
+                applyScaleMode(mediaEl);
+            }
+            updateScaleBtn();
+        }
+
+        function applyScaleMode(el) {
+            if (state.scaleMode === 'cover') {
+                el.classList.add('scale-fill');
+            } else {
+                el.classList.remove('scale-fill');
+            }
+        }
+
+        function updateScaleBtn() {
+            els.scaleBtn.innerText = state.scaleMode === 'contain' ? 'FIT' : 'FILL';
         }
 
         function isVideoUrl(url) {
