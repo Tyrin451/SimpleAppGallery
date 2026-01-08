@@ -128,8 +128,7 @@
         #view-gallery {
             position: relative;
             /* For absolute overlay positioning */
-            height: 100%;
-            /* Override calc for full screen feel if needed, but nav is fixed */
+            height: calc(100% - var(--nav-height));
             display: none;
             background-color: #000;
             /* Centering media */
@@ -213,13 +212,13 @@
         /* Evaluation Controls */
         #eval-controls {
             position: absolute;
-            bottom: 80px;
-            /* Above nav */
+            bottom: 20px;
+            /* Relative to the gallery view which ends at nav bar */
             left: 50%;
             transform: translateX(-50%);
             display: flex;
             gap: 20px;
-            z-index: 200;
+            z-index: 500;
         }
 
         .btn-vote {
@@ -639,8 +638,10 @@
 
             if (e.key === 'ArrowRight') nextMedia();
             if (e.key === 'ArrowLeft') prevMedia();
-            if (e.key === 'ArrowUp') vote('ok');
-            if (e.key === 'ArrowDown') vote('nok');
+            if (e.key === 'ArrowRight') nextMedia();
+            if (e.key === 'ArrowLeft') prevMedia();
+            if (e.key === 'ArrowUp') vote('good');
+            if (e.key === 'ArrowDown') vote('bad');
         }
 
         function preloadNext(currentIndex) {
