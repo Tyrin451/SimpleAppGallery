@@ -209,6 +209,74 @@
         .hidden {
             display: none !important;
         }
+
+        /* Evaluation Controls */
+        #eval-controls {
+            position: absolute;
+            bottom: 80px;
+            /* Above nav */
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 200;
+        }
+
+        .btn-vote {
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #555;
+            color: #fff;
+            font-size: 24px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-vote:active {
+            transform: scale(0.95);
+        }
+
+        .btn-vote.active.up {
+            background: rgba(46, 204, 113, 0.8);
+            /* Green */
+            border-color: #2ecc71;
+        }
+
+        .btn-vote.active.down {
+            background: rgba(231, 76, 60, 0.8);
+            /* Red */
+            border-color: #e74c3c;
+        }
+
+        #btn-download {
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            max-width: 300px;
+            margin-top: 10px;
+        }
+
+        #btn-reset {
+            background-color: transparent;
+            color: #666;
+            border: 1px solid #333;
+            padding: 8px 15px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 30px;
+        }
     </style>
 </head>
 
@@ -220,6 +288,8 @@
             <textarea id="media-source"
                 placeholder="Coller une URL par ligne...&#10;https://example.com/image.jpg&#10;https://example.com/video.mp4"></textarea>
             <button id="save-btn">CHARGER / SAUVEGARDER</button>
+            <button id="btn-download">TÉLÉCHARGER JSON</button>
+            <button id="btn-reset">RÉINITIALISER L'APPLICATION (Vider cache/data)</button>
         </div>
 
         <!-- Gallery View -->
@@ -228,6 +298,11 @@
             <div id="media-container">
                 <!-- Media will be injected here -->
                 <div class="placeholder-text">Aucun média chargé</div>
+            </div>
+
+            <div id="eval-controls">
+                <button class="btn-vote down" id="btn-thumb-down">👎</button>
+                <button class="btn-vote up" id="btn-thumb-up">👍</button>
             </div>
             <!-- Touchable zones for navigation -->
             <div class="click-zone left" id="zone-prev"></div>
@@ -247,6 +322,7 @@
         const state = {
             currentIndex: 0,
             mediaList: [],
+            evaluations: {}, // format: { url: 'good' | 'bad' }
             scaleMode: 'contain' // 'contain' (Fit) or 'cover' (Fill)
         };
 
@@ -254,6 +330,7 @@
          * Constants & Elements
          */
         const STORAGE_KEY = 'media_gallery_source';
+        const EVAL_STORAGE_KEY = 'media_gallery_evaluations';
         const els = {
             viewConfig: document.getElementById('view-config'),
             viewGallery: document.getElementById('view-gallery'),
@@ -261,10 +338,14 @@
             navGallery: document.getElementById('nav-gallery'),
             textarea: document.getElementById('media-source'),
             saveBtn: document.getElementById('save-btn'),
+            downloadBtn: document.getElementById('btn-download'),
             mediaContainer: document.getElementById('media-container'),
             zonePrev: document.getElementById('zone-prev'),
             zoneNext: document.getElementById('zone-next'),
-            scaleBtn: document.getElementById('scale-btn')
+            scaleBtn: document.getElementById('scale-btn'),
+            btnThumbUp: document.getElementById('btn-thumb-up'),
+            btnThumbDown: document.getElementById('btn-thumb-down'),
+            resetBtn: document.getElementById('btn-reset')
         };
 
         /**
@@ -289,6 +370,15 @@
                 parseAndLoadState(storedData);
             }
 
+            const storedEvals = localStorage.getItem(EVAL_STORAGE_KEY);
+            if (storedEvals) {
+                try {
+                    state.evaluations = JSON.parse(storedEvals);
+                } catch (e) {
+                    console.error('Failed to parse evaluations', e);
+                }
+            }
+
             const storedScale = localStorage.getItem('media_gallery_scale');
             if (storedScale) {
                 state.scaleMode = storedScale;
@@ -297,6 +387,12 @@
 
             // Event Listeners
             els.saveBtn.addEventListener('click', handleSave);
+            els.downloadBtn.addEventListener('click', downloadJSON);
+
+            els.btnThumbUp.addEventListener('click', () => vote('good'));
+            els.btnThumbDown.addEventListener('click', () => vote('bad'));
+            els.resetBtn.addEventListener('click', handleReset);
+
             els.navConfig.addEventListener('click', () => switchView('config'));
             els.navGallery.addEventListener('click', () => {
                 handleSave(); // Auto-save on switch
@@ -354,6 +450,8 @@
                 .map(line => line.trim())
                 .filter(line => line.length > 0 && (line.startsWith('http') || line.startsWith('blob:') || line.startsWith('data:'))); // Basic validation
 
+            console.log('Media list updated. Count:', state.mediaList.length);
+
             // Reset index if out of bounds, otherwise keep it (unless list is empty)
             if (state.currentIndex >= state.mediaList.length) {
                 state.currentIndex = 0;
@@ -385,6 +483,8 @@
                 els.viewGallery.classList.add('active');
                 els.navConfig.classList.remove('active');
                 els.navGallery.classList.add('active');
+
+                console.log('Switching to gallery. Index:', state.currentIndex, 'List length:', state.mediaList.length);
 
                 renderMedia(state.currentIndex);
             }
@@ -432,6 +532,63 @@
 
             // Preload next
             preloadNext(index);
+
+            updateEvalButtons();
+        }
+
+        function updateEvalButtons() {
+            const currentUrl = state.mediaList[state.currentIndex];
+            const status = state.evaluations[currentUrl];
+
+            els.btnThumbUp.classList.remove('active');
+            els.btnThumbDown.classList.remove('active');
+
+            if (status === 'good') els.btnThumbUp.classList.add('active');
+            if (status === 'bad') els.btnThumbDown.classList.add('active');
+        }
+
+        function vote(status) {
+            if (state.mediaList.length === 0) return;
+            const currentUrl = state.mediaList[state.currentIndex];
+
+            // Toggle if clicking same
+            if (state.evaluations[currentUrl] === status) {
+                delete state.evaluations[currentUrl];
+            } else {
+                state.evaluations[currentUrl] = status;
+            }
+
+            localStorage.setItem(EVAL_STORAGE_KEY, JSON.stringify(state.evaluations));
+            updateEvalButtons();
+        }
+
+        function downloadJSON() {
+            const result = state.mediaList.map(url => ({
+                url: url,
+                result: state.evaluations[url] || 'none'
+            }));
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(result, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "evaluations.json");
+            document.body.appendChild(downloadAnchorNode); // required for firefox
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function handleReset() {
+            if (confirm("Voulez-vous réinitialiser l'application ? Cela videra toutes les URLs et les évaluations.")) {
+                localStorage.clear();
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(registrations => {
+                        for (let registration of registrations) {
+                            registration.unregister();
+                        }
+                    });
+                }
+                location.reload(true);
+            }
         }
 
         function toggleScale() {
@@ -482,6 +639,8 @@
 
             if (e.key === 'ArrowRight') nextMedia();
             if (e.key === 'ArrowLeft') prevMedia();
+            if (e.key === 'ArrowUp') vote('ok');
+            if (e.key === 'ArrowDown') vote('nok');
         }
 
         function preloadNext(currentIndex) {
