@@ -44,7 +44,7 @@ A lightweight, high-performance Progressive Web App (PWA) designed to curate and
 - `index.html`: The main entry point containing HTML structure, styles, and application logic.
 - `sw.js`: Service Worker for offline support and asset caching.
 - `manifest.json`: PWA configuration for installation and look-and-feel.
-- `Specifications.md`: Detailed technical specifications (in French).
+
 
 ## 🔧 Technical Details
 - **Stack**: Vanilla JS (ES6+), CSS3 (Flexbox/Grid), HTML5.
